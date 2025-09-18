@@ -1,0 +1,429 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Online Voting System</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body {
+            font-family: 'Arial', sans-serif;
+            background-color: #f3f4f6;
+        }
+        .hidden {
+            display: none;
+        }
+        #vote-preview {
+            transition: opacity 0.3s ease;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col items-center justify-center p-4">
+    <div class="w-full max-w-md mb-4">
+        <label for="language-select" class="sr-only">Select Language</label>
+        <select id="language-select" class="p-2 border rounded" onchange="changeLanguage()">
+            <option value="en">English</option>
+            <option value="te">Telugu</option>
+        </select>
+    </div>
+
+    <h1 id="title" class="text-3xl font-bold text-gray-800 mb-6">Online Voting System</h1>
+    
+    <!-- Voter Flow Section -->
+    <div id="voter-flow" class="bg-white p-6 rounded-lg shadow-lg w-full max-w-md">
+        <!-- Access Voting Portal -->
+        <div id="step-portal" class="step">
+            <h2 id="portal-title" class="text-xl font-semibold mb-4">Welcome to Voting Portal</h2>
+            <button onclick="goToStep('auth')" class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600" data-i18n="enter-portal">Enter Portal</button>
+        </div>
+
+        <!-- Authentication -->
+        <div id="step-auth" class="step hidden">
+            <h2 id="auth-title" class="text-xl font-semibold mb-4">Authenticate</h2>
+            <input type="text" id="voter-id" placeholder="Enter Voter ID (alphanumeric, 4-10 chars)" class="w-full p-2 mb-4 border rounded" aria-label="Voter ID">
+            <button onclick="authenticate()" class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600" data-i18n="login">Login</button>
+            <p id="auth-error" class="text-red-500 mt-2 hidden" data-i18n="auth-error">Invalid Voter ID or already voted</p>
+            <button onclick="goToStep('register')" class="text-blue-500 underline mt-2" data-i18n="register">Register</button>
+        </div>
+
+        <!-- Registration -->
+        <div id="step-register" class="step hidden">
+            <h2 id="register-title" class="text-xl font-semibold mb-4">Register</h2>
+            <input type="text" id="new-voter-id" placeholder="Enter New Voter ID (alphanumeric, 4-10 chars)" class="w-full p-2 mb-4 border rounded" aria-label="New Voter ID" required>
+            <input type="date" id="voter-dob" placeholder="Enter Date of Birth" class="w-full p-2 mb-4 border rounded" aria-label="Date of Birth" required>
+            <button onclick="register()" class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600" data-i18n="register">Register</button>
+            <p id="register-success" class="text-green-500 mt-2 hidden" data-i18n="register-success">Registration successful!</p>
+            <p id="register-error" class="text-red-500 mt-2 hidden" data-i18n="register-error">Invalid Voter ID (use alphanumeric, 4-10 chars) or missing Date of Birth</p>
+            <button onclick="goToStep('auth')" class="text-blue-500 underline mt-2" data-i18n="back-to-login">Back to Login</button>
+        </div>
+
+        <!-- Verify Eligibility -->
+        <div id="step-verify" class="step hidden">
+            <h2 id="verify-title" class="text-xl font-semibold mb-4">Verifying Eligibility</h2>
+            <p class="mb-4" data-i18n="checking-eligibility">Checking voter eligibility...</p>
+            <div class="animate-pulse h-4 bg-gray-200 rounded w-3/4 mb-4"></div>
+            <button onclick="verifyEligibility()" class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600" data-i18n="continue">Continue</button>
+            <p id="verify-error" class="text-red-500 mt-2 hidden" data-i18n="verify-error">Ineligible to Vote: Must be 18 or older or already voted</p>
+        </div>
+
+        <!-- Cast Vote -->
+        <div id="step-vote" class="step hidden">
+            <h2 id="vote-title" class="text-xl font-semibold mb-4">Cast Your Vote</h2>
+            <select id="candidate" class="w-full p-2 mb-4 border rounded" aria-label="Select Candidate">
+                <option value="" disabled selected data-i18n="select-candidate">Select a candidate</option>
+                <option value="Janasena (JSP)" class="text-red-600">Janasena (JSP)</option>
+                <option value="YCP" class="text-blue-600">YCP</option>
+                <option value="TDP" class="text-yellow-600">TDP</option>
+            </select>
+            <p id="vote-preview" class="mb-4 text-gray-600 hidden">You selected: <span id="preview-candidate"></span></p>
+            <button onclick="previewVote()" class="bg-yellow-500 text-white px-4 py-2 rounded hover:bg-yellow-600 mb-2" data-i18n="preview-vote">Preview Vote</button>
+            <button onclick="castVote()" class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600" data-i18n="submit-vote">Submit Vote</button>
+            <p id="vote-error" class="text-red-500 mt-2 hidden" data-i18n="vote-error">Please select a candidate</p>
+        </div>
+
+        <!-- Confirmation -->
+        <div id="step-confirm" class="step hidden">
+            <h2 id="confirm-title" class="text-xl font-semibold mb-4">Vote Confirmed</h2>
+            <p id="vote-id" class="mb-4"></p>
+            <button onclick="goToStep('end')" class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600" data-i18n="finish">Finish</button>
+        </div>
+
+        <!-- End -->
+        <div id="step-end" class="step hidden">
+            <h2 id="end-title" class="text-xl font-semibold mb-4">Thank You for Voting!</h2>
+            <p class="mb-4" data-i18n="session-ended">Your session has ended.</p>
+            <button onclick="goToStep('portal')" class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600" data-i18n="start-over">Start Over</button>
+        </div>
+    </div>
+
+    <!-- Admin Section -->
+    <div id="admin-section" class="mt-8 bg-white p-6 rounded-lg shadow-lg w-full max-w-md">
+        <h2 id="admin-title" class="text-xl font-semibold mb-4">Admin Panel</h2>
+        <button onclick="toggleAdmin()" class="bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600 mb-4" data-i18n="show-hide-results">Show/Hide Results</button>
+        <div id="admin-results" class="hidden">
+            <h3 class="text-lg font-semibold mb-2" data-i18n="vote-tally">Vote Tally</h3>
+            <ul id="vote-tally" class="mb-4"></ul>
+            <p id="vote-winner" class="text-lg font-semibold mb-4"></p>
+            <h3 class="text-lg font-semibold mb-2" data-i18n="vote-history">Vote History</h3>
+            <ul id="vote-history" class="mb-4"></ul>
+            <canvas id="vote-chart" class="mb-4"></canvas>
+            <button onclick="publishResults()" class="bg-purple-500 text-white px-4 py-2 rounded hover:bg-purple-600" data-i18n="publish-results">Publish Results</button>
+            <p id="publish-message" class="text-green-500 mt-2 hidden" data-i18n="publish-message">Results Published!</p>
+        </div>
+    </div>
+
+    <script>
+        // Mock data
+        const voters = [
+            { id: 'V123', dob: '1990-01-01' },
+            { id: 'V456', dob: '2000-05-15' }
+        ];
+        let votes = [];
+        let currentVoter = null;
+        let inactivityTimer = null;
+        let voteChart = null;
+
+        // Language translations
+        const translations = {
+            en: {
+                'title': 'Online Voting System',
+                'portal-title': 'Welcome to Voting Portal',
+                'enter-portal': 'Enter Portal',
+                'auth-title': 'Authenticate',
+                'login': 'Login',
+                'auth-error': 'Invalid Voter ID or already voted',
+                'register': 'Register',
+                'register-title': 'Register',
+                'register-success': 'Registration successful!',
+                'register-error': 'Invalid Voter ID (use alphanumeric, 4-10 chars) or missing Date of Birth',
+                'back-to-login': 'Back to Login',
+                'verify-title': 'Verifying Eligibility',
+                'checking-eligibility': 'Checking voter eligibility...',
+                'continue': 'Continue',
+                'verify-error': 'Ineligible to Vote: Must be 18 or older or already voted',
+                'vote-title': 'Cast Your Vote',
+                'select-candidate': 'Select a candidate',
+                'preview-vote': 'Preview Vote',
+                'submit-vote': 'Submit Vote',
+                'vote-error': 'Please select a candidate',
+                'confirm-title': 'Vote Confirmed',
+                'finish': 'Finish',
+                'end-title': 'Thank You for Voting!',
+                'session-ended': 'Your session has ended.',
+                'start-over': 'Start Over',
+                'admin-title': 'Admin Panel',
+                'show-hide-results': 'Show/Hide Results',
+                'vote-tally': 'Vote Tally',
+                'vote-history': 'Vote History',
+                'publish-results': 'Publish Results',
+                'publish-message': 'Results Published!'
+            },
+            te: {
+                'title': 'ఆన్‌లైన్ ఓటింగ్ సిస్టమ్',
+                'portal-title': 'ఓటింగ్ పోర్టల్‌కు స్వాగతం',
+                'enter-portal': 'పోర్టల్‌లోకి ప్రవేశించండి',
+                'auth-title': 'ప్రమాణీకరణ',
+                'login': 'లాగిన్',
+                'auth-error': 'చెల్లని ఓటరు ID లేదా ఇప్పటికే ఓటు వేసారు',
+                'register': 'నమోదు చేయండి',
+                'register-title': 'నమోదు',
+                'register-success': 'నమోదు విజయవంతమైంది!',
+                'register-error': 'చెల్లని ఓటరు ID (ఆల్ఫాన్యూమెరిక్, 4-10 అక్షరాలు) లేదా పుట్టిన తేదీ లేదు',
+                'back-to-login': 'లాగిన్‌కు తిరిగి వెళ్ళండి',
+                'verify-title': 'అర్హతను ధృవీకరిస్తోంది',
+                'checking-eligibility': 'ఓటరు అర్హతను తనిఖీ చేస్తోంది...',
+                'continue': 'కొనసాగండి',
+                'verify-error': 'ఓటు వేయడానికి అర్హత లేదు: 18 ఏళ్లు లేదా అంతకంటే ఎక్కువ ఉండాలి లేదా ఇప్పటికే ఓటు వేసారు',
+                'vote-title': 'మీ ఓటు వేయండి',
+                'select-candidate': 'ఒక అభ్యర్థిని ఎంచుకోండి',
+                'preview-vote': 'ఓటు పరిశీలన',
+                'submit-vote': 'ఓటు సమర్పించండి',
+                'vote-error': 'దయచేసి ఒక అభ్యర్థిని ఎంచుకోండి',
+                'confirm-title': 'ఓటు ధృవీకరించబడింది',
+                'finish': 'పూర్తి',
+                'end-title': 'ఓటు వేసినందుకు ధన్యవాదాలు!',
+                'session-ended': 'మీ సెషన్ ముగిసింది.',
+                'start-over': 'మళ్లీ ప్రారంభించండి',
+                'admin-title': 'అడ్మిన్ ప్యానెల్',
+                'show-hide-results': 'ఫలితాలను చూపించు/దాచు',
+                'vote-tally': 'ఓటు లెక్కింపు',
+                'vote-history': 'ఓటు చరిత్ర',
+                'publish-results': 'ఫలితాలను ప్రచురించండి',
+                'publish-message': 'ఫలితాలు ప్రచురించబడ్డాయి!'
+            }
+        };
+
+        // Navigation between steps
+        function goToStep(stepId) {
+            document.querySelectorAll('.step').forEach(step => step.classList.add('hidden'));
+            document.getElementById(`step-${stepId}`).classList.remove('hidden');
+            clearErrors();
+            resetInactivityTimer();
+        }
+
+        // Clear error messages
+        function clearErrors() {
+            document.querySelectorAll('.text-red-500').forEach(error => error.classList.add('hidden'));
+            document.getElementById('vote-preview').classList.add('hidden');
+        }
+
+        // Input sanitization
+        function sanitizeInput(input) {
+            const div = document.createElement('div');
+            div.textContent = input;
+            return div.innerHTML;
+        }
+
+        // Input validation for voter ID
+        function isValidVoterId(voterId) {
+            const regex = /^[a-zA-Z0-9]{4,10}$/;
+            return regex.test(voterId);
+        }
+
+        // Calculate age from DOB
+        function isEligibleToVote(dob) {
+            const birthDate = new Date(dob);
+            const today = new Date();
+            const age = today.getFullYear() - birthDate.getFullYear();
+            const monthDiff = today.getMonth() - birthDate.getMonth();
+            if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+                return age - 1 >= 18;
+            }
+            return age >= 18;
+        }
+
+        // Get Tailwind color class for candidate
+        function getCandidateColorClass(candidate) {
+            switch (candidate) {
+                case 'Janasena (JSP)': return 'text-red-600';
+                case 'YCP': return 'text-blue-600';
+                case 'TDP': return 'text-yellow-600';
+                default: return 'text-gray-600';
+            }
+        }
+
+        // Language change
+        function changeLanguage() {
+            const lang = document.getElementById('language-select').value;
+            document.querySelectorAll('[data-i18n]').forEach(element => {
+                const key = element.getAttribute('data-i18n');
+                element.textContent = translations[lang][key];
+            });
+            document.getElementById('title').textContent = translations[lang]['title'];
+            document.getElementById('portal-title').textContent = translations[lang]['portal-title'];
+            document.getElementById('auth-title').textContent = translations[lang]['auth-title'];
+            document.getElementById('register-title').textContent = translations[lang]['register-title'];
+            document.getElementById('verify-title').textContent = translations[lang]['verify-title'];
+            document.getElementById('vote-title').textContent = translations[lang]['vote-title'];
+            document.getElementById('confirm-title').textContent = translations[lang]['confirm-title'];
+            document.getElementById('end-title').textContent = translations[lang]['end-title'];
+            document.getElementById('admin-title').textContent = translations[lang]['admin-title'];
+        }
+
+        // Authentication
+        function authenticate() {
+            const voterId = sanitizeInput(document.getElementById('voter-id').value);
+            if (isValidVoterId(voterId) && voters.some(voter => voter.id === voterId) && !votes.some(vote => vote.voterId === voterId)) {
+                currentVoter = voterId;
+                goToStep('verify');
+            } else {
+                document.getElementById('auth-error').classList.remove('hidden');
+            }
+        }
+
+        // Registration
+        function register() {
+            const newVoterId = sanitizeInput(document.getElementById('new-voter-id').value);
+            const dob = document.getElementById('voter-dob').value;
+            if (isValidVoterId(newVoterId) && dob && !voters.some(voter => voter.id === newVoterId)) {
+                voters.push({ id: newVoterId, dob });
+                document.getElementById('register-success').classList.remove('hidden');
+                setTimeout(() => goToStep('auth'), 1500);
+            } else {
+                document.getElementById('register-error').classList.remove('hidden');
+            }
+        }
+
+        // Verify Eligibility
+        function verifyEligibility() {
+            const voter = voters.find(v => v.id === currentVoter);
+            if (voter && isEligibleToVote(voter.dob) && !votes.some(vote => vote.voterId === currentVoter)) {
+                goToStep('vote');
+            } else {
+                document.getElementById('verify-error').classList.remove('hidden');
+                setTimeout(() => goToStep('end'), 2000);
+            }
+        }
+
+        // Preview Vote
+        function previewVote() {
+            const candidate = document.getElementById('candidate').value;
+            if (candidate) {
+                const colorClass = getCandidateColorClass(candidate);
+                document.getElementById('preview-candidate').innerHTML = `<span class="${colorClass}">${candidate}</span>`;
+                document.getElementById('vote-preview').classList.remove('hidden');
+            } else {
+                document.getElementById('vote-error').classList.remove('hidden');
+            }
+        }
+
+        // Cast Vote
+        function castVote() {
+            const candidate = document.getElementById('candidate').value;
+            if (candidate) {
+                const voteId = 'VOTE-' + Math.random().toString(36).substr(2, 9);
+                const timestamp = new Date().toISOString();
+                votes.push({ voterId: currentVoter, candidate, voteId, timestamp });
+                document.getElementById('vote-id').textContent = `Vote ID: ${voteId}`;
+                goToStep('confirm');
+            } else {
+                document.getElementById('vote-error').classList.remove('hidden');
+            }
+        }
+
+        // Session Timeout
+        function resetInactivityTimer() {
+            if (inactivityTimer) clearTimeout(inactivityTimer);
+            inactivityTimer = setTimeout(() => {
+                if (currentVoter) {
+                    alert('Session timed out due to inactivity.');
+                    currentVoter = null;
+                    goToStep('portal');
+                }
+            }, 5 * 60 * 1000); // 5 minutes
+        }
+
+        // Event listeners for resetting inactivity timer
+        document.addEventListener('click', resetInactivityTimer);
+        document.addEventListener('keydown', resetInactivityTimer);
+
+        // Determine Winner
+        function getWinner() {
+            if (votes.length === 0) return "No votes cast yet.";
+            const tally = votes.reduce((acc, vote) => {
+                acc[vote.candidate] = (acc[vote.candidate] || 0) + 1;
+                return acc;
+            }, {});
+            const maxVotes = Math.max(...Object.values(tally));
+            const winners = Object.keys(tally).filter(candidate => tally[candidate] === maxVotes);
+            if (winners.length > 1) {
+                const winnerText = winners.map(w => `<span class="${getCandidateColorClass(w)}">${w}</span>`).join(', ');
+                return `Tie between: ${winnerText} with ${maxVotes} votes each`;
+            }
+            return `Winner: <span class="${getCandidateColorClass(winners[0])}">${winners[0]}</span> with ${maxVotes} votes`;
+        }
+
+        // Admin: Toggle Results
+        function toggleAdmin() {
+            const results = document.getElementById('admin-results');
+            results.classList.toggle('hidden');
+            if (!results.classList.contains('hidden')) {
+                const tally = votes.reduce((acc, vote) => {
+                    acc[vote.candidate] = (acc[vote.candidate] || 0) + 1;
+                    return acc;
+                }, {});
+                const tallyList = document.getElementById('vote-tally');
+                tallyList.innerHTML = Object.entries(tally).map(([candidate, count]) => 
+                    `<li><span class="${getCandidateColorClass(candidate)}">${candidate}</span>: ${count} votes</li>`
+                ).join('');
+                document.getElementById('vote-winner').innerHTML = getWinner();
+                const historyList = document.getElementById('vote-history');
+                historyList.innerHTML = votes.map(vote => 
+                    `<li><span class="${getCandidateColorClass(vote.candidate)}">${vote.candidate}</span> by ${vote.voterId} at ${vote.timestamp}</li>`
+                ).join('');
+
+                // Update Chart
+                if (voteChart) voteChart.destroy();
+                const ctx = document.getElementById('vote-chart').getContext('2d');
+                voteChart = new Chart(ctx, {
+                    type: 'bar',
+                    data: {
+                        labels: Object.keys(tally),
+                        datasets: [{
+                            label: 'Votes',
+                            data: Object.values(tally),
+                            backgroundColor: Object.keys(tally).map(candidate => {
+                                switch (candidate) {
+                                    case 'Janasena (JSP)': return '#dc2626'; // Red
+                                    case 'YCP': return '#2563eb'; // Blue
+                                    case 'TDP': return '#ca8a04'; // Yellow
+                                    default: return '#6b7280';
+                                }
+                            }),
+                            borderColor: Object.keys(tally).map(candidate => {
+                                switch (candidate) {
+                                    case 'Janasena (JSP)': return '#b91c1c';
+                                    case 'YCP': return '#1e40af';
+                                    case 'TDP': return '#a16207';
+                                    default: return '#4b5563';
+                                }
+                            }),
+                            borderWidth: 1
+                        }]
+                    },
+                    options: {
+                        scales: {
+                            y: { beginAtZero: true, ticks: { stepSize: 1 } }
+                        },
+                        plugins: {
+                            legend: { display: false },
+                            title: { display: true, text: translations[document.getElementById('language-select').value]['vote-tally'] }
+                        }
+                    }
+                });
+            }
+        }
+
+        // Admin: Publish Results
+        function publishResults() {
+            document.getElementById('publish-message').classList.remove('hidden');
+            setTimeout(() => document.getElementById('publish-message').classList.add('hidden'), 2000);
+        }
+
+        // Initialize
+        goToStep('portal');
+        changeLanguage();
+    </script>
+</body>
+</html>
