@@ -52,9 +52,10 @@
             <h2 id="register-title" class="text-xl font-semibold mb-4">Register</h2>
             <input type="text" id="new-voter-id" placeholder="Enter New Voter ID (alphanumeric, 4-10 chars)" class="w-full p-2 mb-4 border rounded" aria-label="New Voter ID" required>
             <input type="date" id="voter-dob" placeholder="Enter Date of Birth" class="w-full p-2 mb-4 border rounded" aria-label="Date of Birth" required>
+            <input type="text" id="voter-aadhaar" placeholder="Enter Aadhaar Number (12 digits)" class="w-full p-2 mb-4 border rounded" aria-label="Aadhaar Number" pattern="[0-9]{12}" required>
             <button onclick="register()" class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600" data-i18n="register">Register</button>
             <p id="register-success" class="text-green-500 mt-2 hidden" data-i18n="register-success">Registration successful!</p>
-            <p id="register-error" class="text-red-500 mt-2 hidden" data-i18n="register-error">Invalid Voter ID (use alphanumeric, 4-10 chars) or missing Date of Birth</p>
+            <p id="register-error" class="text-red-500 mt-2 hidden" data-i18n="register-error">Invalid Voter ID (use alphanumeric, 4-10 chars), missing Date of Birth, or invalid/duplicate Aadhaar (12 digits)</p>
             <button onclick="goToStep('auth')" class="text-blue-500 underline mt-2" data-i18n="back-to-login">Back to Login</button>
         </div>
 
@@ -116,8 +117,8 @@
     <script>
         // Mock data
         const voters = [
-            { id: 'V123', dob: '1990-01-01' },
-            { id: 'V456', dob: '2000-05-15' }
+            { id: 'V123', dob: '1990-01-01', aadhaar: '123456789012' },
+            { id: 'V456', dob: '2000-05-15', aadhaar: '987654321098' }
         ];
         let votes = [];
         let currentVoter = null;
@@ -136,7 +137,7 @@
                 'register': 'Register',
                 'register-title': 'Register',
                 'register-success': 'Registration successful!',
-                'register-error': 'Invalid Voter ID (use alphanumeric, 4-10 chars) or missing Date of Birth',
+                'register-error': 'Invalid Voter ID (use alphanumeric, 4-10 chars), missing Date of Birth, or invalid/duplicate Aadhaar (12 digits)',
                 'back-to-login': 'Back to Login',
                 'verify-title': 'Verifying Eligibility',
                 'checking-eligibility': 'Checking voter eligibility...',
@@ -169,7 +170,7 @@
                 'register': 'నమోదు చేయండి',
                 'register-title': 'నమోదు',
                 'register-success': 'నమోదు విజయవంతమైంది!',
-                'register-error': 'చెల్లని ఓటరు ID (ఆల్ఫాన్యూమెరిక్, 4-10 అక్షరాలు) లేదా పుట్టిన తేదీ లేదు',
+                'register-error': 'చెల్లని ఓటరు ID (ఆల్ఫాన్యూమెరిక్, 4-10 అక్షరాలు), పుట్టిన తేదీ లేదు, లేదా చెల్లని/డూప్లికేట్ ఆధార్ (12 అంకెలు)',
                 'back-to-login': 'లాగిన్‌కు తిరిగి వెళ్ళండి',
                 'verify-title': 'అర్హతను ధృవీకరిస్తోంది',
                 'checking-eligibility': 'ఓటరు అర్హతను తనిఖీ చేస్తోంది...',
@@ -221,10 +222,16 @@
             return regex.test(voterId);
         }
 
+        // Input validation for Aadhaar
+        function isValidAadhaar(aadhaar) {
+            const regex = /^[0-9]{12}$/;
+            return regex.test(aadhaar);
+        }
+
         // Calculate age from DOB
         function isEligibleToVote(dob) {
             const birthDate = new Date(dob);
-            const today = new Date();
+            const today = new Date('2025-09-18T09:55:00+05:30'); // Current date and time (IST)
             const age = today.getFullYear() - birthDate.getFullYear();
             const monthDiff = today.getMonth() - birthDate.getMonth();
             if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
@@ -276,8 +283,9 @@
         function register() {
             const newVoterId = sanitizeInput(document.getElementById('new-voter-id').value);
             const dob = document.getElementById('voter-dob').value;
-            if (isValidVoterId(newVoterId) && dob && !voters.some(voter => voter.id === newVoterId)) {
-                voters.push({ id: newVoterId, dob });
+            const aadhaar = sanitizeInput(document.getElementById('voter-aadhaar').value);
+            if (isValidVoterId(newVoterId) && dob && isValidAadhaar(aadhaar) && !voters.some(voter => voter.id === newVoterId) && !voters.some(voter => voter.aadhaar === aadhaar)) {
+                voters.push({ id: newVoterId, dob, aadhaar });
                 document.getElementById('register-success').classList.remove('hidden');
                 setTimeout(() => goToStep('auth'), 1500);
             } else {
@@ -369,9 +377,10 @@
                 ).join('');
                 document.getElementById('vote-winner').innerHTML = getWinner();
                 const historyList = document.getElementById('vote-history');
-                historyList.innerHTML = votes.map(vote => 
-                    `<li><span class="${getCandidateColorClass(vote.candidate)}">${vote.candidate}</span> by ${vote.voterId} at ${vote.timestamp}</li>`
-                ).join('');
+                historyList.innerHTML = votes.map(vote => {
+                    const voter = voters.find(v => v.id === vote.voterId);
+                    return `<li><span class="${getCandidateColorClass(vote.candidate)}">${vote.candidate}</span> by ${vote.voterId} (Aadhaar: ${voter ? voter.aadhaar : 'Unknown'}) at ${vote.timestamp}</li>`;
+                }).join('');
 
                 // Update Chart
                 if (voteChart) voteChart.destroy();
